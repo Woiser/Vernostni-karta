@@ -40,7 +40,6 @@
             text-align: center;
         }
         
-        /* Nový čistý styl pro GDPR informaci pod tlačítkem */
         .gdpr-text {
             font-size: 11px;
             color: #777;
@@ -177,15 +176,14 @@
 <body>
 
     <div class="card" id="main-card">
-        <!-- 1. OBRAZOVKA: PŘIHLÁŠENÍ S JEDNODUCHÝM TEXTEM -->
+        <!-- 1. OBRAZOVKA: PŘIHLÁŠENÍ -->
         <div id="login-screen">
             <h2>Věrnostní Karta</h2>
             <p>Zadejte své telefonní číslo:</p>
-            <input type="tel" id="phone" placeholder="123456789">
+            <input type="tel" id="phone" placeholder="777123456">
             
             <button onclick="login()">Vstoupit</button>
             
-            <!-- Elegantní text místo checkboxu -->
             <div class="gdpr-text">
                 Vstupem do aplikace souhlasíte se zpracováním tel. čísla pro účely vedení věrnostní karty. Číslo slouží výhradně k vašemu přihlášení a nebude předáváno třetím stranám ani zneužíváno pro reklamu.
             </div>
@@ -203,7 +201,7 @@
                 <div class="stamp" onclick="toggleStamp(this, 3)">3</div>
                 <div class="stamp" onclick="toggleStamp(this, 4)">4</div>
                 <div class="stamp" onclick="toggleStamp(this, 5)">5</div>
-                <div class="stamp" class="stamp special" onclick="toggleStamp(this, 6)">6<span class="sub-text">Doprovod za půlku</span></div>
+                <div class="stamp special" onclick="toggleStamp(this, 6)">6<span class="sub-text">Doprovod za půlku</span></div>
                 <div class="stamp" onclick="toggleStamp(this, 7)">7</div>
                 <div class="stamp" onclick="toggleStamp(this, 8)">8</div>
                 <div class="stamp" onclick="toggleStamp(this, 9)">9</div>
@@ -232,112 +230,92 @@
             <button onclick="logout()" id="logout-btn" style="background-color: #777; margin-top: 15px; position: relative; z-index: 10;">Odhlásit se</button>
         </div>
     </div>
- <script>
-        let activeStampsCount = 0;
-        const LIFETIME_SECONDS = 62; // Životnost karty v sekundách
-        let checkInterval; 
+    <!-- Načtení oficiální knihovny Supabase -->
+    <script src="https://jsdelivr.net"></script>
 
-        function login() {
-            const phoneInput = document.getElementById('phone').value.trim();
+    <script>
+        // Nastavení klíčů pro databázi Pohurka Karticka
+        const SUPABASE_URL = "https://supabase.co";
+        const SUPABASE_KEY = "sb_publishable_Zvzw7LpbGSpCZK02mYyyWg_Xqxpe9Wk";
+        const supabase = json_supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let currentPhone = "";
+        let clientData = null;
+        let checkInterval;
+        const LIFETIME_SECONDS = 62; // TESTOVACÍ ČAS: 62 sekund
+
+        // --- VYKRESLENÍ POLÍČEK PODLE AKTUÁLNÍHO STAVU ---
+        function renderCardState() {
+            clearInterval(checkInterval);
             
-            if (phoneInput === "123456789") {
-                document.getElementById('login-screen').classList.add('hidden');
-                document.getElementById('card-screen').classList.remove('hidden');
-                
-                if (localStorage.getItem('card_locked_123456789') === 'true') {
-                    applyPermanentLock();
-                    return;
-                }
-
-                checkCardExpiry();
-                clearInterval(checkInterval);
-                checkInterval = setInterval(checkCardExpiry, 1000);
-            } else {
-                alert("Nesprávné telefonní číslo. Pro testování zadejte: 123456789");
+            if (clientData.stav_karty === 'uzamceno') {
+                applyPermanentLockVisuals();
+                return;
             }
-        }
 
-        function checkCardExpiry() {
-            const firstClickTime = localStorage.getItem('card_start_123456789');
-            
-            if (firstClickTime) {
-                const startTimestamp = parseInt(firstClickTime, 10);
-                const now = new Date().getTime();
-                
-                const msPassed = now - startTimestamp;
-                const secondsPassed = msPassed / 1000;
-                const secondsRemaining = Math.ceil(LIFETIME_SECONDS - secondsPassed);
-
-                if (secondsRemaining <= 0) {
-                    clearInterval(checkInterval);
-                    applyExpiryLock();
+            const stamps = document.querySelectorAll('.grid .stamp');
+            stamps.forEach((stamp, index) => {
+                stamp.classList.remove('active');
+                const slotNumber = index + 1;
+                if (slotNumber === 6) {
+                    stamp.innerHTML = `6<span class="sub-text">Doprovod za půlku</span>`;
                 } else {
-                    document.getElementById('expiry-info').innerText = `⏱️ TEST: Platnost karty končí za: ${secondsRemaining} s`;
+                    stamp.innerHTML = slotNumber;
                 }
+            });
+
+            const historie = clientData.historie_casu ? clientData.historie_casu.split(',') : [];
+            
+            historie.forEach((casText, index) => {
+                if (index < stamps.length) {
+                    const stamp = stamps[index];
+                    stamp.classList.add('active');
+                    if (index === 5) {
+                        stamp.innerHTML = `🏋️<span class="sub-text">Doprovod za 1/2</span><span class="sub-text" style="font-weight:bold;">${casText}</span>`;
+                    } else {
+                        stamp.innerHTML = `🏋️<span class="sub-text">${casText}</span>`;
+                    }
+                }
+            });
+
+            if (clientData.pocet_razitek === 10) {
+                document.getElementById('bonus-container').classList.remove('hidden');
+                document.getElementById('expiry-info').classList.add('hidden');
+                return;
+            }
+
+            if (clientData.cas_aktivace) {
+                checkCardExpiry();
+                checkInterval = setInterval(checkCardExpiry, 1000);
             } else {
                 document.getElementById('expiry-info').innerText = `⏱️ Karta bude platná 62 sekund od prvního označení`;
             }
         }
 
-        function toggleStamp(element, number) {
-            if (element.classList.contains('active')) return;
+        // --- HLÍDÁNÍ A VÝPOČET EXPIRACE KARTY ---
+        function checkCardExpiry() {
+            if (!clientData.cas_aktivace) return;
+
+            const startTimestamp = parseInt(clientData.cas_aktivace, 10);
+            const now = new Date().getTime();
             
-            // KONTROLA POSTUPNOSTI: Zjistíme počet aktuálně aktivních políček
-            const currentActiveCount = document.querySelectorAll('.grid .stamp.active').length;
-            
-            // Políčko pustí kliknutí dál jen pokud klikáme na to správné v pořadí
-            if (number !== currentActiveCount + 1) {
-                return; 
-            }
-            
-            // Nastartování odpočtu při prvním kliknutí
-            if (!localStorage.getItem('card_start_123456789')) {
-                const currentTimestamp = new Date().getTime();
-                localStorage.setItem('card_start_123456789', currentTimestamp);
-                checkCardExpiry();
+            const msPassed = now - startTimestamp;
+            const secondsPassed = msPassed / 1000;
+            const secondsRemaining = Math.ceil(LIFETIME_SECONDS - secondsPassed);
+
+            if (secondsRemaining <= 0) {
                 clearInterval(checkInterval);
-                checkInterval = setInterval(checkCardExpiry, 1000);
-            }
-            
-            // Získání přesného času (HODINY:MINUTY:SEKUNDY)
-            const today = new Date();
-            const hours = String(today.getHours()).padStart(2, '0');
-            const minutes = String(today.getMinutes()).padStart(2, '0');
-            const seconds = String(today.getSeconds()).padStart(2, '0');
-            const formattedTime = `${hours}:${minutes}:${seconds}`;
-
-            element.classList.add('active');
-
-            // Zápis ikony a přesného času pod ní
-            if (number === 6) {
-                element.innerHTML = `🏋️<span class="sub-text">Doprovod za 1/2</span><span class="sub-text" style="font-weight:bold;">${formattedTime}</span>`;
+                applyExpiryLockVisuals();
+                if (clientData.stav_karty !== 'expirovano') {
+                    updateDatabaseField('stav_karty', 'expirovano');
+                }
             } else {
-                element.innerHTML = `🏋️<span class="sub-text">${formattedTime}</span>`;
-            }
-            
-            activeStampsCount = document.querySelectorAll('.grid .stamp.active').length;
-            
-            if (activeStampsCount === 10) {
-                clearInterval(checkInterval);
-                document.getElementById('bonus-container').classList.remove('hidden');
-                document.getElementById('expiry-info').classList.add('hidden');
+                document.getElementById('expiry-info').innerText = `⏱️ TEST: Platnost karty končí za: ${secondsRemaining} s`;
             }
         }
 
-        function claimBonus(element) {
-            if (element.classList.contains('active')) return;
-
-            element.classList.add('active');
-            element.innerText = "✅ VSTUP VYUŽIT";
-            
-            localStorage.setItem('card_locked_123456789', 'true');
-            
-            setTimeout(() => {
-                applyPermanentLock();
-            }, 300);
-        }
-
-        function applyPermanentLock() {
+        // --- ZAMČENÍ KARTY (VIZUÁLNÍ PRVKY) ---
+        function applyPermanentLockVisuals() {
             document.getElementById('main-card').classList.add('locked');
             document.getElementById('sad-msg-container').classList.remove('hidden');
             document.getElementById('expired-msg-container').classList.add('hidden');
@@ -345,19 +323,6 @@
             document.getElementById('expiry-info').classList.add('hidden');
             document.getElementById('reset-btn').classList.remove('hidden');
             
-            fillAllStampsVisuals();
-        }
-
-        function applyExpiryLock() {
-            document.getElementById('main-card').classList.add('locked');
-            document.getElementById('expired-msg-container').classList.remove('hidden');
-            document.getElementById('sad-msg-container').classList.add('hidden');
-            document.getElementById('bonus-container').classList.add('hidden');
-            document.getElementById('expiry-info').classList.add('hidden');
-            document.getElementById('reset-btn').classList.remove('hidden');
-        }
-
-        function fillAllStampsVisuals() {
             const stamps = document.querySelectorAll('.grid .stamp');
             stamps.forEach((stamp) => stamp.classList.add('active'));
             const bonusStamp = document.querySelector('.bonus-stamp');
@@ -367,48 +332,172 @@
             }
         }
 
-        function unlockAndReset() {
+        function applyExpiryLockVisuals() {
+            document.getElementById('main-card').classList.add('locked');
+            document.getElementById('expired-msg-container').classList.remove('hidden');
+            document.getElementById('sad-msg-container').classList.add('hidden');
+            document.getElementById('bonus-container').classList.add('hidden');
+            document.getElementById('expiry-info').classList.add('hidden');
+            document.getElementById('reset-btn').classList.remove('hidden');
+        }
+
+        function logout() {
+            clearInterval(checkInterval);
+            currentPhone = "";
+            clientData = null;
+            document.getElementById('phone').value = "";
+            document.getElementById('login-screen').classList.remove('hidden');
+            document.getElementById('card-screen').classList.add('hidden');
+        }
+         // --- ONLINE PŘIHLÁŠENÍ & ZALOŽENÍ NOVÉHO ČÍSLA ---
+        async function login() {
+            const phoneInput = document.getElementById('phone').value.trim();
+            if (!phoneInput) {
+                alert("Zadejte prosím telefonní číslo.");
+                return;
+            }
+            
+            currentPhone = phoneInput;
+            
+            try {
+                let { data, error } = await supabase
+                    .from('klienti')
+                    .select('*')
+                    .eq('telefon', currentPhone)
+                    .maybeSingle();
+
+                if (error) throw error;
+
+                if (!data) {
+                    const { data: newClient, error: insertError } = await supabase
+                        .from('klienti')
+                        .insert([{ 
+                            telefon: currentPhone, 
+                            pocet_razitek: 0, 
+                            cas_aktivace: "", 
+                            historie_casu: "", 
+                            stav_karty: "aktivni" 
+                        }])
+                        .select()
+                        .single();
+
+                    if (insertError) throw insertError;
+                    clientData = newClient;
+                } else {
+                    clientData = data;
+                }
+
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('card-screen').classList.remove('hidden');
+                renderCardState();
+
+            } catch (err) {
+                console.error(err);
+                alert("Chyba databáze: " + err.message);
+            }
+        }
+
+        // --- ONLINE ZÁPIS KLIKNUTÍ DO DATABÁZE ---
+        async function toggleStamp(element, number) {
+            if (element.classList.contains('active') || clientData.stav_karty !== 'aktivni') return;
+            if (number !== clientData.pocet_razitek + 1) return; 
+
+            let updates = {};
+            const nowTimestamp = new Date().getTime();
+            const today = new Date();
+            const formattedTime = `${String(today.getHours()).padStart(2,'0')}:${String(today.getMinutes()).padStart(2,'0')}:${String(today.getSeconds()).padStart(2,'0')}`;
+
+            if (clientData.pocet_razitek === 0 && !clientData.cas_aktivace) {
+                updates.cas_aktivace = String(nowTimestamp);
+                clientData.cas_aktivace = String(nowTimestamp);
+            }
+
+            let novaHistorie = clientData.historie_casu ? clientData.historie_casu.split(',') : [];
+            novaHistorie.push(formattedTime);
+            
+            updates.pocet_razitek = clientData.pocet_razitek + 1;
+            updates.historie_casu = novaHistorie.join(',');
+
+            try {
+                const { data, error } = await supabase
+                    .from('klienti')
+                    .update(updates)
+                    .eq('telefon', currentPhone)
+                    .select()
+                    .single();
+
+                if (error) throw error;
+                clientData = data;
+                renderCardState();
+            } catch (err) {
+                console.error(err);
+                alert("Data se nepodařilo odeslat.");
+            }
+        }
+
+        // --- ONLINE VYUŽITÍ BONUSU ---
+        async function claimBonus(element) {
+            if (element.classList.contains('active')) return;
+
+            try {
+                const { data, error } = await supabase
+                    .from('klienti')
+                    .update({ stav_karty: 'uzamceno' })
+                    .eq('telefon', currentPhone)
+                    .select()
+                    .single();
+
+                if (error) throw error;
+                clientData = data;
+                applyPermanentLockVisuals();
+            } catch (err) {
+                console.error(err);
+                alert("Chyba při zamykání bonusu.");
+            }
+        }
+
+        // --- ONLINE RESET KARTY OBSLUHOU (KÓD 1234) ---
+        async function unlockAndReset() {
             const pin = prompt("Zadejte 4místný kód obsluhy pro aktivaci nové karty:");
             
             if (pin === "1234") {
-                localStorage.removeItem('card_locked_123456789');
-                localStorage.removeItem('card_start_123456789');
-                clearInterval(checkInterval);
-                
-                document.getElementById('main-card').classList.remove('locked');
-                document.getElementById('sad-msg-container').classList.add('hidden');
-                document.getElementById('expired-msg-container').classList.add('hidden');
-                document.getElementById('reset-btn').classList.add('hidden');
-                document.getElementById('expiry-info').classList.remove('hidden');
-                document.getElementById('expiry-info').innerText = `⏱️ Karta bude platná 62 sekund od prvního označení`;
-                
-                const stamps = document.querySelectorAll('.grid .stamp');
-                stamps.forEach((stamp, index) => {
-                    stamp.classList.remove('active');
-                    const slotNumber = index + 1;
-                    if (slotNumber === 6) {
-                        stamp.innerHTML = `6<span class="sub-text">Doprovod za půlku</span>`;
-                    } else {
-                        stamp.innerHTML = slotNumber;
-                    }
-                });
-                
-                const bonusStamp = document.querySelector('.bonus-stamp');
-                bonusStamp.classList.remove('active');
-                bonusStamp.innerHTML = "🎁 11. VSTUP ZADARMO";
-                
-                activeStampsCount = 0;
-                alert("Karta úspěšně obnovena na nových 62 sekund!");
+                try {
+                    const { data, error } = await supabase
+                        .from('klienti')
+                        .update({
+                            pocet_razitek: 0,
+                            cas_aktivace: "",
+                            historie_casu: "",
+                            stav_karty: "aktivni"
+                        })
+                        .eq('telefon', currentPhone)
+                        .select()
+                        .single();
+
+                    if (error) throw error;
+                    clientData = data;
+                    
+                    document.getElementById('main-card').classList.remove('locked');
+                    document.getElementById('sad-msg-container').classList.add('hidden');
+                    document.getElementById('expired-msg-container').classList.add('hidden');
+                    document.getElementById('reset-btn').classList.add('hidden');
+                    document.getElementById('expiry-info').classList.remove('hidden');
+                    
+                    renderCardState();
+                    alert("Karta klienta byla v online databázi vyčištěna.");
+                } catch (err) {
+                    console.error(err);
+                    alert("Chyba při resetování na serveru.");
+                }
             } else {
                 alert("Nesprávný kód obsluhy.");
             }
         }
 
-        function logout() {
-            clearInterval(checkInterval);
-            document.getElementById('phone').value = "";
-            document.getElementById('login-screen').classList.remove('hidden');
-            document.getElementById('card-screen').classList.add('hidden');
+        // Tichá online aktualizace expirace na pozadí
+        async function updateDatabaseField(field, value) {
+            let up = {}; up[field] = value;
+            await supabase.from('klienti').update(up).eq('telefon', currentPhone);
         }
     </script>
 </body>
