@@ -63,7 +63,6 @@
         
         .hidden { display: none !important; }
 
-        /* Mřížka pro 10 políček */
         .grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
@@ -116,7 +115,6 @@
             display: block;
         }
 
-        /* 11. bonusový vstup */
         .bonus-section {
             margin-top: 25px;
             padding-top: 20px;
@@ -143,7 +141,6 @@
             cursor: default;
         }
 
-        /* Zamčená karta */
         .card.locked {
             background-color: #e0e0e0;
             filter: grayscale(1);
@@ -180,7 +177,7 @@
         <div id="login-screen">
             <h2>Věrnostní Karta</h2>
             <p>Zadejte své telefonní číslo:</p>
-            <input type="tel" id="phone" placeholder="777123456">
+            <input type="tel" id="phone" placeholder="777 123 456">
             
             <button onclick="login()">Vstoupit</button>
             
@@ -215,14 +212,12 @@
                 </div>
             </div>
 
-            <!-- Hláška 1: Vyčerpaná karta -->
             <div id="sad-msg-container" class="sad-message hidden">
                 už nemáš žádné políčko k zaškrtnutí, ale je vidět že seš fit!
             </div>
 
-            <!-- Hláška 2: Propadlá karta -->
             <div id="expired-msg-container" class="expired-message hidden">
-                Platnost tvé kartičky (TEST: 62 sekund) právě vypršela. Sice ti propadla zbývající políčka, ale tvá dosavadní snaha se počítá! Popros obsluhu o aktivaci nové.
+                Platnost tvé kartičky (62 dní) právě vypršela. Sice ti propadla zbývající políčka, ale tvá dosavadní snaha se počítá! Popros obsluhu o aktivaci nové.
             </div>
             
             <button onclick="unlockAndReset()" id="reset-btn" class="hidden" style="background-color: #ff9800; margin-top: 20px; position: relative; z-index: 10; color: white;">🔄 Aktivovat novou kartu (Obsluha)</button>
@@ -230,21 +225,22 @@
             <button onclick="logout()" id="logout-btn" style="background-color: #777; margin-top: 15px; position: relative; z-index: 10;">Odhlásit se</button>
         </div>
     </div>
-    <!-- Načtení oficiální knihovny Supabase -->
+<!-- Načtení oficiální knihovny Supabase z internetu -->
     <script src="https://jsdelivr.net"></script>
 
     <script>
-        // Nastavení klíčů pro databázi Pohurka Karticka
-        const SUPABASE_URL = "https://supabase.co";
+        const SUPABASE_URL = "https://wwwgvhketppyufuupaex.supabase.co";
         const SUPABASE_KEY = "sb_publishable_Zvzw7LpbGSpCZK02mYyyWg_Xqxpe9Wk";
-        const supabase = json_supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        // OPRAVA NÁZVU: Inicializujeme klienta do unikátní proměnné sbc
+        const sbc = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let currentPhone = "";
         let clientData = null;
         let checkInterval;
-        const LIFETIME_SECONDS = 62; // TESTOVACÍ ČAS: 62 sekund
+        const LIFETIME_DAYS = 62; // OSTRÝ PROVOZ: Karta platí 62 dní od zaškrtnutí 1. políčka
 
-        // --- VYKRESLENÍ POLÍČEK PODLE AKTUÁLNÍHO STAVU ---
+        // --- VYKRESLENÍ KARTY NA DISPLEJ ---
         function renderCardState() {
             clearInterval(checkInterval);
             
@@ -286,35 +282,35 @@
 
             if (clientData.cas_aktivace) {
                 checkCardExpiry();
-                checkInterval = setInterval(checkCardExpiry, 1000);
+                checkInterval = setInterval(checkCardExpiry, 60000); // Kontrola stačí jednou za minutu
             } else {
-                document.getElementById('expiry-info').innerText = `⏱️ Karta bude platná 62 sekund od prvního označení`;
+                document.getElementById('expiry-info').innerText = `⏱️ Karta bude platná 62 dní od prvního označení`;
             }
         }
 
-        // --- HLÍDÁNÍ A VÝPOČET EXPIRACE KARTY ---
+        // --- HODNOCENÍ OSTRÉ EXPIRACE (62 DNÍ) ---
         function checkCardExpiry() {
             if (!clientData.cas_aktivace) return;
 
             const startTimestamp = parseInt(clientData.cas_aktivace, 10);
             const now = new Date().getTime();
             
+            // Výpočet uplynulých dnů
             const msPassed = now - startTimestamp;
-            const secondsPassed = msPassed / 1000;
-            const secondsRemaining = Math.ceil(LIFETIME_SECONDS - secondsPassed);
+            const daysPassed = msPassed / (1000 * 60 * 60 * 24);
+            const daysRemaining = Math.ceil(LIFETIME_DAYS - daysPassed);
 
-            if (secondsRemaining <= 0) {
+            if (daysRemaining <= 0) {
                 clearInterval(checkInterval);
                 applyExpiryLockVisuals();
                 if (clientData.stav_karty !== 'expirovano') {
                     updateDatabaseField('stav_karty', 'expirovano');
                 }
             } else {
-                document.getElementById('expiry-info').innerText = `⏱️ TEST: Platnost karty končí za: ${secondsRemaining} s`;
+                document.getElementById('expiry-info').innerText = `⏱️ Platnost karty končí za: ${daysRemaining} dní`;
             }
         }
 
-        // --- ZAMČENÍ KARTY (VIZUÁLNÍ PRVKY) ---
         function applyPermanentLockVisuals() {
             document.getElementById('main-card').classList.add('locked');
             document.getElementById('sad-msg-container').classList.remove('hidden');
@@ -349,7 +345,7 @@
             document.getElementById('login-screen').classList.remove('hidden');
             document.getElementById('card-screen').classList.add('hidden');
         }
-         // --- ONLINE PŘIHLÁŠENÍ & ZALOŽENÍ NOVÉHO ČÍSLA ---
+// --- ONLINE PŘIHLÁŠENÍ & REGISTRACE VŠECH ČÍSEL ---
         async function login() {
             const phoneInput = document.getElementById('phone').value.trim();
             if (!phoneInput) {
@@ -360,7 +356,8 @@
             currentPhone = phoneInput;
             
             try {
-                let { data, error } = await supabase
+                // Sbc komunikuje online se Supabase
+                let { data, error } = await sbc
                     .from('klienti')
                     .select('*')
                     .eq('telefon', currentPhone)
@@ -369,7 +366,7 @@
                 if (error) throw error;
 
                 if (!data) {
-                    const { data: newClient, error: insertError } = await supabase
+                    const { data: newClient, error: insertError } = await sbc
                         .from('klienti')
                         .insert([{ 
                             telefon: currentPhone, 
@@ -393,19 +390,23 @@
 
             } catch (err) {
                 console.error(err);
-                alert("Chyba databáze: " + err.message);
+                alert("Chyba při komunikaci s databází: " + err.message);
             }
         }
 
-        // --- ONLINE ZÁPIS KLIKNUTÍ DO DATABÁZE ---
+        // --- UKLÁDÁNÍ LEKCÍ (ČINKY S DATEM DD.MM.) ---
         async function toggleStamp(element, number) {
             if (element.classList.contains('active') || clientData.stav_karty !== 'aktivni') return;
             if (number !== clientData.pocet_razitek + 1) return; 
 
             let updates = {};
             const nowTimestamp = new Date().getTime();
+            
+            // OSTRÝ PROVOZ: Pod činku ukládáme den.měsíc. (např. 08.10.)
             const today = new Date();
-            const formattedTime = `${String(today.getHours()).padStart(2,'0')}:${String(today.getMinutes()).padStart(2,'0')}:${String(today.getSeconds()).padStart(2,'0')}`;
+            const day = String(today.getDate()).padStart(2, '0');
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const formattedDate = `${day}.${month}.`;
 
             if (clientData.pocet_razitek === 0 && !clientData.cas_aktivace) {
                 updates.cas_aktivace = String(nowTimestamp);
@@ -413,13 +414,13 @@
             }
 
             let novaHistorie = clientData.historie_casu ? clientData.historie_casu.split(',') : [];
-            novaHistorie.push(formattedTime);
+            novaHistorie.push(formattedDate);
             
             updates.pocet_razitek = clientData.pocet_razitek + 1;
             updates.historie_casu = novaHistorie.join(',');
 
             try {
-                const { data, error } = await supabase
+                const { data, error } = await sbc
                     .from('klienti')
                     .update(updates)
                     .eq('telefon', currentPhone)
@@ -431,16 +432,15 @@
                 renderCardState();
             } catch (err) {
                 console.error(err);
-                alert("Data se nepodařilo odeslat.");
+                alert("Nepodařilo se odeslat lekci do databáze.");
             }
         }
 
-        // --- ONLINE VYUŽITÍ BONUSU ---
         async function claimBonus(element) {
             if (element.classList.contains('active')) return;
 
             try {
-                const { data, error } = await supabase
+                const { data, error } = await sbc
                     .from('klienti')
                     .update({ stav_karty: 'uzamceno' })
                     .eq('telefon', currentPhone)
@@ -456,13 +456,12 @@
             }
         }
 
-        // --- ONLINE RESET KARTY OBSLUHOU (KÓD 1234) ---
         async function unlockAndReset() {
             const pin = prompt("Zadejte 4místný kód obsluhy pro aktivaci nové karty:");
             
             if (pin === "1234") {
                 try {
-                    const { data, error } = await supabase
+                    const { data, error } = await sbc
                         .from('klienti')
                         .update({
                             pocet_razitek: 0,
@@ -484,7 +483,7 @@
                     document.getElementById('expiry-info').classList.remove('hidden');
                     
                     renderCardState();
-                    alert("Karta klienta byla v online databázi vyčištěna.");
+                    alert("Karta klienta byla úspěšně vyčištěna pro nové kolo!");
                 } catch (err) {
                     console.error(err);
                     alert("Chyba při resetování na serveru.");
@@ -494,10 +493,9 @@
             }
         }
 
-        // Tichá online aktualizace expirace na pozadí
         async function updateDatabaseField(field, value) {
             let up = {}; up[field] = value;
-            await supabase.from('klienti').update(up).eq('telefon', currentPhone);
+            await sbc.from('klienti').update(up).eq('telefon', currentPhone);
         }
     </script>
 </body>
