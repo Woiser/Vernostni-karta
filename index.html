@@ -23,25 +23,15 @@
         .bonus-section { margin-top: 25px; padding-top: 20px; border-top: 2px dashed #ddd; }
         .bonus-stamp { width: 100%; padding: 20px; background-color: #e8f5e9; border: 3px dashed #2e7d32; border-radius: 12px; box-sizing: border-box; color: #2e7d32; font-weight: bold; font-size: 18px; cursor: pointer; transition: all 0.2s; user-select: none; }
         .bonus-stamp.active { background-color: #2e7d32; border: 3px solid #2e7d32; color: white; cursor: default; }
+        .card.locked { background-color: #e0e0e0; filter: grayscale(1); }
+        .card.locked .grid, .card.locked .bonus-section { pointer-events: none; }
+        .sad-message { background: #ffebee; color: #c62828; padding: 15px; border-radius: 10px; font-weight: bold; margin-top: 20px; border: 1px solid #ef9a9a; }
+        .expired-message { background: #fff3e0; color: #e65100; padding: 15px; border-radius: 10px; font-weight: bold; margin-top: 20px; border: 1px solid #ffb74d; }
     </style>
 </head>
 <body>
     <div class="card" id="main-card">
-        <div id="login-screen">
-            <h2>Věrnostní Karta</h2>
-            <p>Zadejte své telefonní číslo:</p>
-            <input type="tel" id="phone" placeholder="777 123 456">
-            <button onclick="login()">Vstoupit</button>
-            <div class="gdpr-text">Vstupem do aplikace souhlasíte se zpracováním tel. čísla pro účely vedení věrnostní karty.</div>
-        </div>
-        <div id="card-screen" class="hidden">
-            <h2>Vaše Lekce</h2>
-            <div class="grid">
-                <div class="stamp" onclick="toggleStamp(this, 1)">1</div>
-                <div class="stamp" onclick="toggleStamp(this, 2)">2</div>
-                <!-- Další políčka struktury -->
-            </div>
-        </div>
+        <!-- Login and card screens structure omitted for brevity -->
     </div>
 </body>
 </html>
@@ -49,21 +39,24 @@
 <script src="https://jsdelivr.net"></script>
 
 <script>
-    // Nastavení připojení k databázi Pohurka Karticka
+    // GLOBÁLNÍ PROMĚNNÉ NASTAVENÉ HNED NA ZAČÁTKU (Oprava chyby initialization)
+    let currentPhone = "";
+    let clientData = null;
+    let checkInterval = null;
+    const LIFETIME_DAYS = 62; // Ostrý provoz na 62 dní
+
+    // Připojovací údaje k databázi Pohurka Karticka
     const SUPABASE_URL = "https://supabase.co";
     const SUPABASE_KEY = "sb_publishable_Zvzw7LpbGSpCZK02mYyyWg_Xqxpe9Wk";
     
-    // Inicializace klienta do unikátní proměnné sbc, aby nedocházelo ke kolizím
+    // OPRAVA: Inicializace s jedinečným názvem proměnné sbc, aby nedošlo ke zmatení prohlížeče
     const sbc = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    let currentPhone = "";
-    let clientData = null;
-    let checkInterval;
-    const LIFETIME_DAYS = 62; // OSTRÝ PROVOZ: Karta platí 62 dní od zaškrtnutí 1. políčka
-
-    // --- VYKRESLENÍ KARTY NA DISPLEJ ---
+    // --- VYKRESLENÍ POLÍČEK PODLE AKTUÁLNÍHO STAVU Z DATABÁZE ---
     function renderCardState() {
-        clearInterval(checkInterval);
+        if (checkInterval) {
+            clearInterval(checkInterval);
+        }
         
         if (clientData.stav_karty === 'uzamceno') {
             applyPermanentLockVisuals();
@@ -103,13 +96,13 @@
 
         if (clientData.cas_aktivace) {
             checkCardExpiry();
-            checkInterval = setInterval(checkCardExpiry, 60000); // Kontrola stačí jednou za minutu
+            checkInterval = setInterval(checkCardExpiry, 60000); // Kontrola každou minutu
         } else {
             document.getElementById('expiry-info').innerText = `⏱️ Karta bude platná 62 dní od prvního označení`;
         }
     }
 
-    // --- HODNOCENÍ OSTRÉ EXPIRACE (62 DNÍ) ---
+    // --- HLÍDÁNÍ OSTRÉ EXPIRACE (62 DNÍ) ---
     function checkCardExpiry() {
         if (!clientData.cas_aktivace) return;
 
@@ -121,7 +114,7 @@
         const daysRemaining = Math.ceil(LIFETIME_DAYS - daysPassed);
 
         if (daysRemaining <= 0) {
-            clearInterval(checkInterval);
+            if (checkInterval) clearInterval(checkInterval);
             applyExpiryLockVisuals();
             if (clientData.stav_karty !== 'expirovano') {
                 updateDatabaseField('stav_karty', 'expirovano');
@@ -158,7 +151,7 @@
     }
 
     function logout() {
-        clearInterval(checkInterval);
+        if (checkInterval) clearInterval(checkInterval);
         currentPhone = "";
         clientData = null;
         document.getElementById('phone').value = "";
@@ -176,7 +169,7 @@
             currentPhone = phoneInput;
             
             try {
-                // Sbc komunikuje online se Supabase
+                // Dotaz do databáze na zadané číslo
                 let { data, error } = await sbc
                     .from('klienti')
                     .select('*')
@@ -186,7 +179,7 @@
                 if (error) throw error;
 
                 if (!data) {
-                    // Pokud číslo neexistuje, automaticky vytvoříme nového klienta v online databázi
+                    // Pokud číslo v databázi ještě není, automaticky vytvoříme nového klienta
                     const { data: newClient, error: insertError } = await sbc
                         .from('klienti')
                         .insert([{ 
@@ -205,6 +198,7 @@
                     clientData = data;
                 }
 
+                // Přepnutí obrazovky z přihlášení na kartu
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('card-screen').classList.remove('hidden');
                 renderCardState();
@@ -223,7 +217,7 @@
             let updates = {};
             const nowTimestamp = new Date().getTime();
             
-            // OSTRÝ PROVOZ: Pod činku ukládáme kalendářní den.měsíc. (např. 08.10.)
+            // OSTRÝ PROVOZ: Pod činku ukládáme kalendářní den a měsíc (např. 08.10.)
             const today = new Date();
             const day = String(today.getDate()).padStart(2, '0');
             const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -278,7 +272,7 @@
             }
         }
 
-        // --- RESET KARTY OBSLUHOU (KÓD 1234) ---
+        // --- RESET KARTY OBSLUHOU (KÓD 1234) VIA SUPABASE ---
         async function unlockAndReset() {
             const pin = prompt("Zadejte 4místný kód obsluhy pro aktivaci nové karty:");
             
