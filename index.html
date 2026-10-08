@@ -1393,86 +1393,165 @@ historie.forEach((dateText, index) => {
 
 
     // =========================================================
-    // UZAMČENÍ PO VYUŽITÍ BONUSU
-    // =========================================================
+// UZAMČENÍ PO VYUŽITÍ BONUSU
+// =========================================================
 
-    function applyPermanentLockVisuals() {
+function applyPermanentLockVisuals() {
 
-        getElement("main-card")
-            .classList.add(
-                "locked"
-            );
-
-
-        getElement("sad-msg-container")
-            .classList.remove(
-                "hidden"
-            );
-
-
-        getElement("expired-msg-container")
-            .classList.add(
-                "hidden"
-            );
-
-
-        getElement("bonus-container")
-            .classList.add(
-                "hidden"
-            );
-
-
-        getElement("expiry-info")
-            .classList.add(
-                "hidden"
-            );
-
-
-        getElement("motivation-message")
-            .classList.add(
-                "hidden"
-            );
-
-
-        getElement("reset-btn")
-            .classList.remove(
-                "hidden"
-            );
-
-
-        const stamps =
-            document.querySelectorAll(
-                "#stamp-grid .stamp"
-            );
-
-
-        stamps.forEach(
-            stamp =>
-                stamp.classList.add(
-                    "active"
-                )
+    getElement("main-card")
+        .classList.add(
+            "locked"
         );
 
 
-        const bonusStamp =
-            document.querySelector(
-                ".bonus-stamp"
-            );
+    getElement("sad-msg-container")
+        .classList.remove(
+            "hidden"
+        );
 
 
-        if (bonusStamp) {
+    getElement("expired-msg-container")
+        .classList.add(
+            "hidden"
+        );
 
-            bonusStamp.classList.add(
+
+    getElement("bonus-container")
+        .classList.add(
+            "hidden"
+        );
+
+
+    getElement("expiry-info")
+        .classList.add(
+            "hidden"
+        );
+
+
+    getElement("motivation-message")
+        .classList.add(
+            "hidden"
+        );
+
+
+    // ZOBRAZÍ TLAČÍTKO PRO NOVOU AKTIVACI
+
+    getElement("reset-btn")
+        .classList.remove(
+            "hidden"
+        );
+
+
+    // VŠECHNA RAZÍTKA ZŮSTANOU VIZUÁLNĚ AKTIVNÍ
+
+    const stamps =
+        document.querySelectorAll(
+            "#stamp-grid .stamp"
+        );
+
+
+    stamps.forEach(
+        stamp =>
+            stamp.classList.add(
                 "active"
-            );
+            )
+    );
 
 
-            bonusStamp.innerText =
-                "✅ VSTUP VYUŽIT";
+    // BONUSOVÉ TLAČÍTKO
 
-        }
+    const bonusStamp =
+        document.querySelector(
+            ".bonus-stamp"
+        );
+
+
+    if (bonusStamp) {
+
+        bonusStamp.classList.add(
+            "active"
+        );
+
+
+        bonusStamp.innerText =
+            "✅ VSTUP VYUŽIT";
 
     }
+
+}
+
+
+// =========================================================
+// RESET VZHLEDU PO NOVÉ AKTIVACI
+// =========================================================
+
+function resetVisualState() {
+
+    getElement("main-card")
+        .classList.remove(
+            "locked"
+        );
+
+
+    getElement("sad-msg-container")
+        .classList.add(
+            "hidden"
+        );
+
+
+    getElement("expired-msg-container")
+        .classList.add(
+            "hidden"
+        );
+
+
+    getElement("bonus-container")
+        .classList.add(
+            "hidden"
+        );
+
+
+    getElement("reset-btn")
+        .classList.add(
+            "hidden"
+        );
+
+
+    getElement("expiry-info")
+        .classList.remove(
+            "hidden"
+        );
+
+
+    getElement("motivation-message")
+        .classList.remove(
+            "hidden"
+        );
+
+
+    // DŮLEŽITÉ:
+    // PO ADMIN RESETU VRÁTÍ BONUSOVÉ TLAČÍTKO
+    // DO STAVU PRO NOVÉ KOLO
+
+    const bonusStamp =
+        document.querySelector(
+            ".bonus-stamp"
+        );
+
+
+    if (bonusStamp) {
+
+        bonusStamp.classList.remove(
+            "active"
+        );
+
+
+        bonusStamp.innerText =
+            "🎟️ VSTUP VYUŽÍT";
+
+    }
+
+}
 
 
     // =========================================================
