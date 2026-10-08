@@ -1095,15 +1095,15 @@
         // =========================================
 
         if (
-            clientData.stav_karty ===
-            "uzamceno"
-        ) {
+    clientData.stav_karty === "uzamceno" &&
+    Number(clientData.pocet_razitek) >= 10
+) {
 
-            applyPermanentLockVisuals();
+    applyPermanentLockVisuals();
 
-            return;
+    return;
 
-        }
+}
 
 
         // =========================================
