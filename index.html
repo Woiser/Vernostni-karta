@@ -173,6 +173,14 @@
             display: block;
         }
 
+        .motivation-message {
+            margin-top: 12px;
+            color: #4CAF50;
+            font-size: 14px;
+            font-weight: bold;
+            min-height: 20px;
+        }
+
         .bonus-section {
             margin-top: 25px;
             padding-top: 20px;
@@ -243,7 +251,7 @@
         .expiry-info {
             color: #777;
             font-size: 12px;
-            margin-top: 15px;
+            margin-top: 10px;
             min-height: 16px;
         }
 
@@ -384,6 +392,16 @@
         </div>
 
 
+        <!-- MOTIVAČNÍ TEXT -->
+
+        <div
+            id="motivation-message"
+            class="motivation-message"
+        >
+            🎯 Začněte první lekcí!
+        </div>
+
+
         <!-- EXPIRACE -->
 
         <div
@@ -495,7 +513,7 @@
 
 
     // =========================================================
-    // POMOCNÉ FUNKCE
+    // POMOCNÁ FUNKCE
     // =========================================================
 
     function getElement(id) {
@@ -536,8 +554,6 @@
                 error
             );
 
-            // Pokud se volno nepodaří načíst,
-            // nepřerušíme přihlášení.
             daysOff = [];
 
             return;
@@ -588,7 +604,7 @@
     //
     // 62 AKTIVNÍCH DNÍ
     //
-    // Dny uvedené v tabulce "volno"
+    // Dny z tabulky "volno"
     // se NEPOČÍTAJÍ.
     // =========================================================
 
@@ -615,15 +631,6 @@
 
         let activeDays = 0;
 
-
-        /*
-         * Posouváme se po jednotlivých
-         * kalendářních dnech.
-         *
-         * Den volna = nepočítá se.
-         *
-         * Ostatní den = 1 aktivní den.
-         */
 
         while (
             activeDays < LIFETIME_DAYS
@@ -654,7 +661,7 @@
 
 
     // =========================================================
-    // VÝPOČET POČTU DNÍ DO EXPIRACE
+    // POČET ZBÝVAJÍCÍCH DNÍ
     // =========================================================
 
     function getRemainingActiveDays(
@@ -697,6 +704,72 @@
 
 
     // =========================================================
+    // MOTIVAČNÍ HLÁŠKA
+    // =========================================================
+
+    function updateMotivationMessage() {
+
+        const message =
+            getElement(
+                "motivation-message"
+            );
+
+
+        if (
+            !message ||
+            !clientData
+        ) {
+
+            return;
+
+        }
+
+
+        const stamps =
+            Number(
+                clientData.pocet_razitek || 0
+            );
+
+
+        const remaining =
+            Math.max(
+                0,
+                10 - stamps
+            );
+
+
+        if (
+            stamps === 0
+        ) {
+
+            message.innerText =
+                "🎯 Začněte první lekcí!";
+
+        } else if (
+            stamps < 9
+        ) {
+
+            message.innerText =
+                `🎯 Ještě ${remaining} lekcí do bonusu!`;
+
+        } else if (
+            stamps === 9
+        ) {
+
+            message.innerText =
+                "🔥 Už jen 1 lekce do bonusu!";
+
+        } else {
+
+            message.innerText =
+                "🎉 Bonus je připraven!";
+
+        }
+
+    }
+
+
+    // =========================================================
     // RESET VZHLEDU
     // =========================================================
 
@@ -718,6 +791,9 @@
             .classList.add("hidden");
 
         getElement("expiry-info")
+            .classList.remove("hidden");
+
+        getElement("motivation-message")
             .classList.remove("hidden");
 
     }
@@ -765,13 +841,9 @@
 
         try {
 
-            // Nejprve načteme volno
+            // Načteme dny volna
             await loadDaysOff();
 
-
-            // -----------------------------------------
-            // KLIENT
-            // -----------------------------------------
 
             const {
                 data,
@@ -779,7 +851,10 @@
             } = await sbc
                 .from("klienti")
                 .select("*")
-                .eq("telefon", currentPhone)
+                .eq(
+                    "telefon",
+                    currentPhone
+                )
                 .maybeSingle();
 
 
@@ -788,9 +863,9 @@
             }
 
 
-            // -----------------------------------------
+            // =========================================
             // NOVÝ KLIENT
-            // -----------------------------------------
+            // =========================================
 
             if (!data) {
 
@@ -801,11 +876,20 @@
                     .from("klienti")
                     .insert([
                         {
-                            telefon: currentPhone,
-                            pocet_razitek: 0,
-                            cas_aktivace: null,
-                            historie_casu: "",
-                            stav_karty: "aktivni"
+                            telefon:
+                                currentPhone,
+
+                            pocet_razitek:
+                                0,
+
+                            cas_aktivace:
+                                null,
+
+                            historie_casu:
+                                "",
+
+                            stav_karty:
+                                "aktivni"
                         }
                     ])
                     .select()
@@ -834,11 +918,15 @@
 
 
             getElement("login-screen")
-                .classList.add("hidden");
+                .classList.add(
+                    "hidden"
+                );
 
 
             getElement("card-screen")
-                .classList.remove("hidden");
+                .classList.remove(
+                    "hidden"
+                );
 
 
             renderCardState();
@@ -860,9 +948,12 @@
 
         } finally {
 
-            loginButton.disabled = false;
+            loginButton.disabled =
+                false;
 
-            loading.classList.add("hidden");
+            loading.classList.add(
+                "hidden"
+            );
 
         }
 
@@ -894,9 +985,9 @@
         resetVisualState();
 
 
-        // -----------------------------------------
+        // =========================================
         // UZAMČENO
-        // -----------------------------------------
+        // =========================================
 
         if (
             clientData.stav_karty ===
@@ -910,9 +1001,9 @@
         }
 
 
-        // -----------------------------------------
+        // =========================================
         // EXPIROVÁNO
-        // -----------------------------------------
+        // =========================================
 
         if (
             clientData.stav_karty ===
@@ -926,9 +1017,9 @@
         }
 
 
-        // -----------------------------------------
+        // =========================================
         // RAZÍTKA
-        // -----------------------------------------
+        // =========================================
 
         const stamps =
             document.querySelectorAll(
@@ -948,7 +1039,9 @@
                     index + 1;
 
 
-                if (number === 6) {
+                if (
+                    number === 6
+                ) {
 
                     stamp.innerHTML =
                         `6
@@ -967,12 +1060,13 @@
         );
 
 
-        // -----------------------------------------
+        // =========================================
         // HISTORIE
-        // -----------------------------------------
+        // =========================================
 
         const historieText =
-            clientData.historie_casu || "";
+            clientData.historie_casu ||
+            "";
 
 
         const historie =
@@ -987,7 +1081,9 @@
                 if (
                     index >= stamps.length
                 ) {
+
                     return;
+
                 }
 
 
@@ -1000,7 +1096,9 @@
                 );
 
 
-                if (index === 5) {
+                if (
+                    index === 5
+                ) {
 
                     stamp.innerHTML =
                         `🏋️
@@ -1028,9 +1126,16 @@
         );
 
 
-        // -----------------------------------------
+        // =========================================
+        // MOTIVACE
+        // =========================================
+
+        updateMotivationMessage();
+
+
+        // =========================================
         // BONUS
-        // -----------------------------------------
+        // =========================================
 
         if (
             Number(
@@ -1055,9 +1160,9 @@
         }
 
 
-        // -----------------------------------------
+        // =========================================
         // EXPIRACE
-        // -----------------------------------------
+        // =========================================
 
         if (
             clientData.cas_aktivace
@@ -1097,7 +1202,9 @@
         if (
             !clientData.cas_aktivace
         ) {
+
             return;
+
         }
 
 
@@ -1138,9 +1245,9 @@
             new Date();
 
 
-        // -----------------------------------------
+        // =========================================
         // EXPIRACE
-        // -----------------------------------------
+        // =========================================
 
         if (
             now >= expiryDate
@@ -1182,9 +1289,9 @@
         }
 
 
-        // -----------------------------------------
+        // =========================================
         // ZOBRAZENÍ
-        // -----------------------------------------
+        // =========================================
 
         const remaining =
             getRemainingActiveDays(
@@ -1206,13 +1313,15 @@
 
 
     // =========================================================
-    // VZHLED UZAMČENÉ KARTY
+    // UZAMČENÍ PO VYUŽITÍ BONUSU
     // =========================================================
 
     function applyPermanentLockVisuals() {
 
         getElement("main-card")
-            .classList.add("locked");
+            .classList.add(
+                "locked"
+            );
 
 
         getElement("sad-msg-container")
@@ -1234,6 +1343,12 @@
 
 
         getElement("expiry-info")
+            .classList.add(
+                "hidden"
+            );
+
+
+        getElement("motivation-message")
             .classList.add(
                 "hidden"
             );
@@ -1281,7 +1396,7 @@
 
 
     // =========================================================
-    // VZHLED EXPIROVANÉ KARTY
+    // UZAMČENÍ PO EXPIRACI
     // =========================================================
 
     function applyExpiryLockVisuals() {
@@ -1316,6 +1431,12 @@
             );
 
 
+        getElement("motivation-message")
+            .classList.add(
+                "hidden"
+            );
+
+
         getElement("reset-btn")
             .classList.remove(
                 "hidden"
@@ -1342,7 +1463,9 @@
             clientData.stav_karty !==
             "aktivni"
         ) {
+
             return;
+
         }
 
 
@@ -1351,16 +1474,20 @@
                 "active"
             )
         ) {
+
             return;
+
         }
 
 
         const currentStamps =
             Number(
-                clientData.pocet_razitek || 0
+                clientData.pocet_razitek ||
+                0
             );
 
 
+        // Nelze přeskočit pořadí
         if (
             number !==
             currentStamps + 1
@@ -1371,17 +1498,16 @@
             );
 
             return;
+
         }
 
 
         const updates = {};
 
 
-        // -----------------------------------------
-        // PRVNÍ RAZÍTKO
-        //
-        // timestamptz
-        // -----------------------------------------
+        // =========================================
+        // PRVNÍ RAZÍTKO = AKTIVACE KARTY
+        // =========================================
 
         if (
             currentStamps === 0 &&
@@ -1394,9 +1520,9 @@
         }
 
 
-        // -----------------------------------------
+        // =========================================
         // DATUM LEKCE
-        // -----------------------------------------
+        // =========================================
 
         const today =
             new Date();
@@ -1405,22 +1531,28 @@
         const day =
             String(
                 today.getDate()
-            ).padStart(2, "0");
+            ).padStart(
+                2,
+                "0"
+            );
 
 
         const month =
             String(
                 today.getMonth() + 1
-            ).padStart(2, "0");
+            ).padStart(
+                2,
+                "0"
+            );
 
 
         const formattedDate =
             `${day}.${month}.`;
 
 
-        // -----------------------------------------
+        // =========================================
         // HISTORIE
-        // -----------------------------------------
+        // =========================================
 
         let novaHistorie =
             clientData.historie_casu
@@ -1441,9 +1573,9 @@
             novaHistorie.join(",");
 
 
-        // -----------------------------------------
+        // =========================================
         // ULOŽENÍ
-        // -----------------------------------------
+        // =========================================
 
         try {
 
@@ -1509,7 +1641,9 @@
                 clientData.pocet_razitek
             ) < 10
         ) {
+
             return;
+
         }
 
 
@@ -1518,7 +1652,9 @@
                 "active"
             )
         ) {
+
             return;
+
         }
 
 
@@ -1583,7 +1719,7 @@
 
 
     // =========================================================
-    // RESET KARTY OBSLUHOU
+    // RESET KARTY KÓDEM 1234
     // =========================================================
 
     async function unlockAndReset() {
@@ -1599,26 +1735,20 @@
         }
 
 
-        if (pin !== "1234") {
+        if (
+            pin !== "1234"
+        ) {
 
             alert(
                 "Nesprávný kód obsluhy."
             );
 
             return;
+
         }
 
 
         try {
-
-            /*
-             * DŮLEŽITÉ:
-             *
-             * cas_aktivace = null
-             *
-             * protože nový cyklus ještě
-             * nezačal.
-             */
 
             const {
                 data,
@@ -1672,7 +1802,10 @@
             }
 
 
-            // Vizuální odemčení
+            // =========================================
+            // ODEMKNUTÍ VZHLEDU
+            // =========================================
+
             getElement("main-card")
                 .classList.remove(
                     "locked"
@@ -1703,7 +1836,16 @@
                 );
 
 
-            // Reset bonusu
+            getElement("motivation-message")
+                .classList.remove(
+                    "hidden"
+                );
+
+
+            // =========================================
+            // RESET BONUSU
+            // =========================================
+
             const bonusStamp =
                 document.querySelector(
                     ".bonus-stamp"
@@ -1750,7 +1892,7 @@
 
 
     // =========================================================
-    // AKTUALIZACE DATABÁZE
+    // AKTUALIZACE JEDNÉ HODNOTY
     // =========================================================
 
     async function updateDatabaseField(
@@ -1760,7 +1902,8 @@
 
         const update = {};
 
-        update[field] = value;
+        update[field] =
+            value;
 
 
         const {
@@ -1808,8 +1951,8 @@
         clientData = null;
 
 
-        getElement("phone").value =
-            "";
+        getElement("phone")
+            .value = "";
 
 
         getElement("card-screen")
