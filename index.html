@@ -1166,71 +1166,55 @@
 
 
         // =========================================
-        // HISTORIE
-        // =========================================
+// HISTORIE
+// =========================================
 
-        const historieText =
-    clientData.historie_casu || "";
+let historie = [];
 
-const historie =
-    Array.isArray(historieText)
-        ? historieText
-        : (
-            typeof historieText === "string"
-                ? historieText.split(",")
-                : []
-        );
+if (Array.isArray(clientData.historie_casu)) {
+    historie = clientData.historie_casu;
+} else if (typeof clientData.historie_casu === "string") {
+    historie = clientData.historie_casu
+        .split(",")
+        .map(item => item.trim())
+        .filter(item => item !== "");
+}
 
+historie.forEach((dateText, index) => {
 
-        historie.forEach(
-            (dateText, index) => {
+    if (index >= stamps.length) {
+        return;
+    }
 
-                if (
-                    index >= stamps.length
-                ) {
+    const stamp = stamps[index];
 
-                    return;
+    stamp.classList.add("active");
 
-                }
+    if (index === 5) {
 
+        stamp.innerHTML =
+            `🏋️
+            <span class="sub-text">
+                Doprovod za 1/2
+            </span>
+            <span
+                class="sub-text"
+                style="font-weight:bold;"
+            >
+                ${dateText}
+            </span>`;
 
-                const stamp =
-                    stamps[index];
+    } else {
 
+        stamp.innerHTML =
+            `🏋️
+            <span class="sub-text">
+                ${dateText}
+            </span>`;
 
-                stamp.classList.add(
-                    "active"
-                );
+    }
 
-
-                if (
-                    index === 5
-                ) {
-
-                    stamp.innerHTML =
-                        `🏋️
-                        <span class="sub-text">
-                            Doprovod za 1/2
-                        </span>
-                        <span
-                            class="sub-text"
-                            style="font-weight:bold;"
-                        >
-                            ${dateText}
-                        </span>`;
-
-                } else {
-
-                    stamp.innerHTML =
-                        `🏋️
-                        <span class="sub-text">
-                            ${dateText}
-                        </span>`;
-
-                }
-
-            }
-        );
+});
 
 
         // =========================================
