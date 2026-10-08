@@ -1170,14 +1170,16 @@
         // =========================================
 
         const historieText =
-            clientData.historie_casu ||
-            "";
+    clientData.historie_casu || "";
 
-
-        const historie =
-            historieText
+const historie =
+    Array.isArray(historieText)
+        ? historieText
+        : (
+            typeof historieText === "string"
                 ? historieText.split(",")
-                : [];
+                : []
+        );
 
 
         historie.forEach(
