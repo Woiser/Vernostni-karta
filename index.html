@@ -321,6 +321,14 @@
             Zobrazit kartu
         </button>
 
+        <button
+            type="button"
+            onclick="forgotPin()"
+            style="margin-top:10px; background:#f5f5f5; color:#555; border:1px solid #ccc;"
+        >
+            Zapomněl jsem PIN
+        </button>
+
         <div
             id="login-loading"
             class="loading hidden"
@@ -854,6 +862,80 @@
 
     return result;
 }
+
+
+    async function forgotPin() {
+
+        const phone = normalizePhone(
+            getElement("phone").value
+        );
+
+        if (!phone) {
+            alert("Nejdříve zadejte telefonní číslo.");
+            return;
+        }
+
+        const adminPin = prompt(
+            "Zapomenutý PIN\n\nZadejte 4místný PIN obsluhy:"
+        );
+
+        if (adminPin === null) {
+            return;
+        }
+
+        if (!/^\d{4}$/.test(adminPin)) {
+            alert("PIN obsluhy musí mít přesně 4 číslice.");
+            return;
+        }
+
+        const newPin = prompt(
+            "Zadejte nový 4místný PIN klienta:"
+        );
+
+        if (newPin === null) {
+            return;
+        }
+
+        if (!/^\d{4}$/.test(newPin)) {
+            alert("Nový PIN musí mít přesně 4 číslice.");
+            return;
+        }
+
+        const confirmPin = prompt(
+            "Zopakujte nový 4místný PIN:"
+        );
+
+        if (confirmPin === null) {
+            return;
+        }
+
+        if (newPin !== confirmPin) {
+            alert("Nové PINy se neshodují.");
+            return;
+        }
+
+        try {
+            await callKarticka({
+                action: "reset_pin",
+                phone: phone,
+                admin_pin: adminPin,
+                new_pin: newPin
+            });
+
+            getElement("pinInput").value = "";
+
+            alert(
+                "PIN byl úspěšně změněn. Nyní se můžete přihlásit novým PINem."
+            );
+        } catch (err) {
+            console.error("Reset PIN error:", err);
+            alert(
+                err.message ||
+                "PIN se nepodařilo změnit."
+            );
+        }
+
+    }
 
 
     async function login() {
@@ -1625,7 +1707,7 @@
                 await callKarticka({
                     action: "admin_reset",
                     phone: currentPhone,
-                    admin_pin: pin
+                    adminPin: pin
                 });
 
             clientData =
