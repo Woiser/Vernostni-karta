@@ -63,6 +63,23 @@
             border-color: #4CAF50;
         }
 
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0 15px 0;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            text-align: center;
+            letter-spacing: 4px;
+            outline: none;
+        }
+
+        input[type="password"]:focus {
+            border-color: #4CAF50;
+        }
+
+
         .gdpr-text {
             font-size: 11px;
             color: #777;
@@ -276,7 +293,7 @@
         <h2>💳 Věrnostní karta</h2>
 
         <p>
-            Zadejte své telefonní číslo<br>
+            Zadejte telefonní číslo a 4místný PIN<br>
             pro zobrazení vaší věrnostní karty.
         </p>
 
@@ -286,6 +303,15 @@
             placeholder="Telefonní číslo"
             autocomplete="tel"
             inputmode="tel"
+        >
+
+        <input
+            type="password"
+            id="pinInput"
+            placeholder="4místný PIN"
+            inputmode="numeric"
+            maxlength="4"
+            autocomplete="current-password"
         >
 
         <button
@@ -803,10 +829,41 @@
     // PŘIHLÁŠENÍ
     // =========================================================
 
+    async function callKarticka(body) {
+
+        const response =
+            await fetch(
+                `${SUPABASE_URL}/functions/v1/karticka`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(body)
+                }
+            );
+
+        const result =
+            await response.json();
+
+        if (!response.ok || !result.ok) {
+            throw new Error(
+                result.error ||
+                "Operace se nepodařila."
+            );
+        }
+
+        return result;
+    }
+
+
     async function login() {
 
         const phoneInput =
             getElement("phone");
+
+        const pinInput =
+            getElement("pinInput");
 
         const loginButton =
             getElement("login-btn");
@@ -820,6 +877,9 @@
                 phoneInput.value
             );
 
+        const pin =
+            pinInput.value.trim();
+
 
         if (!phone) {
 
@@ -832,128 +892,87 @@
         }
 
 
+        if (!/^\d{4}$/.test(pin)) {
+
+            alert(
+                "PIN musí mít přesně 4 číslice."
+            );
+
+            return;
+
+        }
+
+
         currentPhone = phone;
-
         loginButton.disabled = true;
-
         loading.classList.remove("hidden");
 
 
         try {
 
-            // Načteme dny volna
             await loadDaysOff();
 
+            let result;
 
-            const {
-                data,
-                error
-            } = await sbc
-                .from("klienti")
-                .select("*")
-                .eq(
-                    "telefon",
-                    currentPhone
-                )
-                .maybeSingle();
+            try {
 
+                // Existující klient
+                result = await callKarticka({
+                    action: "login",
+                    phone: currentPhone,
+                    pin: pin
+                });
 
-            if (error) {
-                throw error;
-            }
+            } catch (loginError) {
 
+                // Pokud karta ještě neexistuje, vytvoříme ji.
+                if (loginError.message === "Klient nenalezen.") {
 
-            // =========================================
-            // NOVÝ KLIENT
-            // =========================================
+                    result = await callKarticka({
+                        action: "create_client",
+                        phone: currentPhone,
+                        pin: pin
+                    });
 
-            if (!data) {
-
-                const {
-                    data: newClient,
-                    error: insertError
-                } = await sbc
-                    .from("klienti")
-                    .insert([
-                        {
-                            telefon:
-                                currentPhone,
-
-                            pocet_razitek:
-                                0,
-
-                            cas_aktivace:
-                                null,
-
-                            historie_casu:
-                                "",
-
-                            stav_karty:
-                                "aktivni"
-                        }
-                    ])
-                    .select()
-                    .single();
-
-
-                if (insertError) {
-                    throw insertError;
+                } else {
+                    throw loginError;
                 }
 
-
-                clientData =
-                    newClient;
-
-            } else {
-
-                clientData =
-                    data;
-
             }
 
+            clientData =
+                result.client;
 
             getElement("display-phone")
                 .innerText =
                 currentPhone;
 
-
             getElement("login-screen")
-                .classList.add(
-                    "hidden"
-                );
-
+                .classList.add("hidden");
 
             getElement("card-screen")
-                .classList.remove(
-                    "hidden"
-                );
+                .classList.remove("hidden");
 
+            pinInput.value = "";
 
             renderCardState();
-
 
         } catch (err) {
 
             console.error(
-                "Supabase login error:",
+                "Login error:",
                 err
             );
 
-
             alert(
-                "Při komunikaci s databází nastala chyba:\n\n" +
-                (err.message || err)
+                err.message ||
+                "Přihlášení se nepodařilo."
             );
-
 
         } finally {
 
-            loginButton.disabled =
-                false;
-
-            loading.classList.add(
-                "hidden"
-            );
+            loginButton.disabled = false;
+            loading.classList.add("hidden");
 
         }
 
@@ -1267,21 +1286,10 @@
             applyExpiryLockVisuals();
 
 
-            if (
-                clientData.stav_karty !==
-                "expirovano"
-            ) {
-
-                clientData.stav_karty =
-                    "expirovano";
-
-
-                updateDatabaseField(
-                    "stav_karty",
-                    "expirovano"
-                );
-
-            }
+            // Stav expirace pouze zobrazíme v prohlížeči.
+            // Do databáze ho z frontendu nezapisujeme.
+            clientData.stav_karty =
+                "expirovano";
 
 
             return;
@@ -1458,152 +1466,42 @@
             return;
         }
 
-
-        if (
-            clientData.stav_karty !==
-            "aktivni"
-        ) {
-
+        if (clientData.stav_karty !== "aktivni") {
             return;
-
         }
 
-
-        if (
-            element.classList.contains(
-                "active"
-            )
-        ) {
-
+        if (element.classList.contains("active")) {
             return;
-
         }
-
 
         const currentStamps =
             Number(
-                clientData.pocet_razitek ||
-                0
+                clientData.pocet_razitek || 0
             );
 
-
-        // Nelze přeskočit pořadí
-        if (
-            number !==
-            currentStamps + 1
-        ) {
+        if (number !== currentStamps + 1) {
 
             alert(
                 `Nejdříve je potřeba označit razítko č. ${currentStamps + 1}.`
             );
 
             return;
-
         }
 
-
-        const updates = {};
-
-
-        // =========================================
-        // PRVNÍ RAZÍTKO = AKTIVACE KARTY
-        // =========================================
-
-        if (
-            currentStamps === 0 &&
-            !clientData.cas_aktivace
-        ) {
-
-            updates.cas_aktivace =
-                new Date().toISOString();
-
-        }
-
-
-        // =========================================
-        // DATUM LEKCE
-        // =========================================
-
-        const today =
-            new Date();
-
-
-        const day =
-            String(
-                today.getDate()
-            ).padStart(
-                2,
-                "0"
-            );
-
-
-        const month =
-            String(
-                today.getMonth() + 1
-            ).padStart(
-                2,
-                "0"
-            );
-
-
-        const formattedDate =
-            `${day}.${month}.`;
-
-
-        // =========================================
-        // HISTORIE
-        // =========================================
-
-        let novaHistorie =
-            clientData.historie_casu
-                ? clientData.historie_casu.split(",")
-                : [];
-
-
-        novaHistorie.push(
-            formattedDate
-        );
-
-
-        updates.pocet_razitek =
-            currentStamps + 1;
-
-
-        updates.historie_casu =
-            novaHistorie.join(",");
-
-
-        // =========================================
-        // ULOŽENÍ
-        // =========================================
+        element.style.pointerEvents = "none";
 
         try {
 
-            const {
-                data,
-                error
-            } = await sbc
-                .from("klienti")
-                .update(updates)
-                .eq(
-                    "telefon",
-                    currentPhone
-                )
-                .select()
-                .single();
-
-
-            if (error) {
-                throw error;
-            }
-
+            const result =
+                await callKarticka({
+                    action: "add_stamp",
+                    phone: currentPhone
+                });
 
             clientData =
-                data;
-
+                result.client;
 
             renderCardState();
-
 
         } catch (err) {
 
@@ -1612,11 +1510,14 @@
                 err
             );
 
-
             alert(
-                "Nepodařilo se uložit lekci do databáze:\n\n" +
-                (err.message || err)
+                err.message ||
+                "Nepodařilo se uložit razítko."
             );
+
+        } finally {
+
+            element.style.pointerEvents = "";
 
         }
 
@@ -1635,70 +1536,39 @@
             return;
         }
 
-
         if (
-            Number(
-                clientData.pocet_razitek
-            ) < 10
+            Number(clientData.pocet_razitek || 0) < 10
         ) {
-
             return;
-
         }
 
-
-        if (
-            element.classList.contains(
-                "active"
-            )
-        ) {
-
+        if (element.classList.contains("active")) {
             return;
-
         }
-
 
         const potvrdit =
             confirm(
                 "Opravdu chcete využít bonus?\n\nPo potvrzení bude karta uzamčena."
             );
 
-
         if (!potvrdit) {
             return;
         }
 
+        element.style.pointerEvents = "none";
 
         try {
 
-            const {
-                data,
-                error
-            } = await sbc
-                .from("klienti")
-                .update({
-                    stav_karty:
-                        "uzamceno"
-                })
-                .eq(
-                    "telefon",
-                    currentPhone
-                )
-                .select()
-                .single();
-
-
-            if (error) {
-                throw error;
-            }
-
+            const result =
+                await callKarticka({
+                    action: "claim_bonus",
+                    phone: currentPhone
+                });
 
             clientData =
-                data;
-
+                result.client;
 
             applyPermanentLockVisuals();
-
 
         } catch (err) {
 
@@ -1707,11 +1577,14 @@
                 err
             );
 
-
             alert(
-                "Chyba při zamykání bonusu:\n\n" +
-                (err.message || err)
+                err.message ||
+                "Chyba při využití bonusu."
             );
+
+        } finally {
+
+            element.style.pointerEvents = "";
 
         }
 
@@ -1719,7 +1592,7 @@
 
 
     // =========================================================
-    // RESET KARTY KÓDEM 1234
+    // RESET KARTY PŘES ADMIN PIN
     // =========================================================
 
     async function unlockAndReset() {
@@ -1729,149 +1602,43 @@
                 "Zadejte 4místný kód obsluhy pro aktivaci nové karty:"
             );
 
-
         if (pin === null) {
             return;
         }
 
-
-        if (
-            pin !== "1234"
-        ) {
+        if (!/^\d{4}$/.test(pin)) {
 
             alert(
-                "Nesprávný kód obsluhy."
+                "Kód musí mít přesně 4 číslice."
             );
 
             return;
-
         }
-
 
         try {
 
-            const {
-                data,
-                error
-            } = await sbc
-                .from("klienti")
-                .update({
-
-                    pocet_razitek: 0,
-
-                    cas_aktivace: null,
-
-                    historie_casu: "",
-
-                    stav_karty: "aktivni"
-
-                })
-                .eq(
-                    "telefon",
-                    currentPhone
-                )
-                .select()
-                .single();
-
-
-            if (error) {
-
-                console.error(
-                    "Supabase reset error:",
-                    error
-                );
-
-                throw error;
-
-            }
-
+            const result =
+                await callKarticka({
+                    action: "admin_reset",
+                    phone: currentPhone,
+                    adminPin: pin
+                });
 
             clientData =
-                data;
+                result.client;
 
-
-            // Zastavení timeru
             if (checkInterval) {
 
-                clearInterval(
-                    checkInterval
-                );
-
+                clearInterval(checkInterval);
                 checkInterval = null;
 
             }
 
-
-            // =========================================
-            // ODEMKNUTÍ VZHLEDU
-            // =========================================
-
-            getElement("main-card")
-                .classList.remove(
-                    "locked"
-                );
-
-
-            getElement("sad-msg-container")
-                .classList.add(
-                    "hidden"
-                );
-
-
-            getElement("expired-msg-container")
-                .classList.add(
-                    "hidden"
-                );
-
-
-            getElement("reset-btn")
-                .classList.add(
-                    "hidden"
-                );
-
-
-            getElement("expiry-info")
-                .classList.remove(
-                    "hidden"
-                );
-
-
-            getElement("motivation-message")
-                .classList.remove(
-                    "hidden"
-                );
-
-
-            // =========================================
-            // RESET BONUSU
-            // =========================================
-
-            const bonusStamp =
-                document.querySelector(
-                    ".bonus-stamp"
-                );
-
-
-            if (bonusStamp) {
-
-                bonusStamp.classList.remove(
-                    "active"
-                );
-
-
-                bonusStamp.innerText =
-                    "🎁 VYUŽÍT BONUS";
-
-            }
-
-
             renderCardState();
-
 
             alert(
                 "Karta klienta byla úspěšně vyčištěna pro nové kolo!"
             );
-
 
         } catch (err) {
 
@@ -1880,10 +1647,9 @@
                 err
             );
 
-
             alert(
-                "Chyba při resetování karty na serveru:\n\n" +
-                (err.message || err)
+                err.message ||
+                "Chyba při resetování karty."
             );
 
         }
@@ -1893,41 +1659,10 @@
 
     // =========================================================
     // AKTUALIZACE JEDNÉ HODNOTY
+    //
+    // Změny karty se neposílají přímo do Supabase z prohlížeče.
+    // Používáme výhradně Edge Function karticka.
     // =========================================================
-
-    async function updateDatabaseField(
-        field,
-        value
-    ) {
-
-        const update = {};
-
-        update[field] =
-            value;
-
-
-        const {
-            error
-        } = await sbc
-            .from("klienti")
-            .update(update)
-            .eq(
-                "telefon",
-                currentPhone
-            );
-
-
-        if (error) {
-
-            console.error(
-                "Database update error:",
-                error
-            );
-
-        }
-
-    }
-
 
     // =========================================================
     // ODHLÁŠENÍ
@@ -1952,6 +1687,9 @@
 
 
         getElement("phone")
+            .value = "";
+
+        getElement("pinInput")
             .value = "";
 
 
@@ -1984,12 +1722,21 @@
             "keydown",
             function(event) {
 
-                if (
-                    event.key === "Enter"
-                ) {
-
+                if (event.key === "Enter") {
                     login();
+                }
 
+            }
+        );
+
+
+    getElement("pinInput")
+        .addEventListener(
+            "keydown",
+            function(event) {
+
+                if (event.key === "Enter") {
+                    login();
                 }
 
             }
