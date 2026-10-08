@@ -925,19 +925,24 @@
             } catch (loginError) {
 
                 // Pokud karta ještě neexistuje, vytvoříme ji.
-                if (loginError.message === "Klient nenalezen.") {
+    if (
+        loginError &&
+        loginError.message &&
+        loginError.message.trim() ===
+            "Klient nebyl nalezen."
+    ) {
 
-                    result = await callKarticka({
-                        action: "create_client",
-                        phone: currentPhone,
-                        pin: pin
-                    });
+        result = await callKarticka({
+            action: "create_client",
+            phone: currentPhone,
+            pin: pin
+        });
 
-                } else {
-                    throw loginError;
-                }
+    } else {
+        throw loginError;
+    }
 
-            }
+}
 
             clientData =
                 result.client;
