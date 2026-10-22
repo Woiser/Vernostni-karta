@@ -189,6 +189,9 @@
             margin-top: 2px;
             display: block;
         }
+        .stamp.special.active .sub-text {
+    font-size: 7px;
+        }
 
         .motivation-message {
             margin-top: 12px;
@@ -399,7 +402,7 @@
             >
                 6
                 <span class="sub-text">
-                    Doprovod za půlku
+                    Někdo nový zdarma
                 </span>
             </div>
 
@@ -442,7 +445,7 @@
             id="expiry-info"
             class="expiry-info"
         >
-            ⏱️ Karta bude platná 62 aktivních dní od prvního označení
+            ⏱️ Karta bude platná 90 aktivních dní od prvního označení
         </div>
 
 
@@ -536,7 +539,7 @@
     // NASTAVENÍ
     // =========================================================
 
-    const LIFETIME_DAYS = 62;
+    const LIFETIME_DAYS = 90;
 
     let currentPhone = "";
     let clientData = null;
@@ -636,7 +639,7 @@
     // =========================================================
     // VÝPOČET EXPIRACE
     //
-    // 62 AKTIVNÍCH DNÍ
+    // 90 AKTIVNÍCH DNÍ
     //
     // Dny z tabulky "volno"
     // se NEPOČÍTAJÍ.
@@ -1151,7 +1154,7 @@
                     stamp.innerHTML =
                         `6
                         <span class="sub-text">
-                            Doprovod za půlku
+                            Někdo nový zdarma
                         </span>`;
 
                 } else {
@@ -1272,7 +1275,7 @@ historie.forEach((dateText, index) => {
 
             getElement("expiry-info")
                 .innerText =
-                "⏱️ Karta bude platná 62 aktivních dní od prvního označení";
+                "⏱️ Karta bude platná 90 aktivních dní od prvního označení";
 
         }
 
